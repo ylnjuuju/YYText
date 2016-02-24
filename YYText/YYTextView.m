@@ -24,11 +24,11 @@
 #import "UIView+YYText.h"
 
 
-static float _YYDeviceSystemVersion() {
-    static float version;
+static double _YYDeviceSystemVersion() {
+    static double version;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        version = [UIDevice currentDevice].systemVersion.floatValue;
+        version = [UIDevice currentDevice].systemVersion.doubleValue;
     });
     return version;
 }
@@ -59,7 +59,7 @@ static float _YYDeviceSystemVersion() {
 
 #define kAutoScrollMinimumDuration 0.1 // Time in seconds to tick auto-scroll.
 #define kLongPressMinimumDuration 0.5 // Time in seconds the fingers must be held down for long press gesture.
-#define kLongPressAllowableMovement 9.0 // Maximum movement in points allowed before the long press fails.
+#define kLongPressAllowableMovement 10.0 // Maximum movement in points allowed before the long press fails.
 
 #define kMagnifierRangedTrackFix -6.0 // Magnifier ranged offset fix.
 #define kMagnifierRangedPopoverOffset 4.0 // Magnifier ranged popover offset.
@@ -71,11 +71,9 @@ static float _YYDeviceSystemVersion() {
 #define kDefaultVerticalInset UIEdgeInsetsMake(4, 6, 4, 6)
 
 
-
 NSString *const YYTextViewTextDidBeginEditingNotification = @"YYTextViewTextDidBeginEditing";
 NSString *const YYTextViewTextDidChangeNotification = @"YYTextViewTextDidChange";
 NSString *const YYTextViewTextDidEndEditingNotification = @"YYTextViewTextDidEndEditing";
-
 
 
 typedef NS_ENUM (NSUInteger, YYTextGrabberDirection) {
@@ -91,7 +89,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 };
 
 
-
 /// An object that captures the state of the text view. Used for undo and redo.
 @interface _YYTextViewUndoObject : NSObject
 @property (nonatomic, strong) NSAttributedString *text;
@@ -105,7 +102,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     return obj;
 }
 @end
-
 
 
 @interface YYTextView () <UIScrollViewDelegate, UIAlertViewDelegate, YYTextDebugTarget, YYTextKeyboardObserver> {
@@ -215,8 +211,12 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 /// Update layout and selection before runloop sleep/end.
 - (void)_commitUpdate {
+#if !TARGET_INTERFACE_BUILDER
     _state.needUpdate = YES;
     [[YYTextTransaction transactionWithTarget:self selector:@selector(_updateIfNeeded)] commit];
+#else
+    [self _update];
+#endif
 }
 
 /// Update layout and selection view if needed.
@@ -358,8 +358,12 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 /// Update placeholder before runloop sleep/end.
 - (void)_commitPlaceholderUpdate {
+#if !TARGET_INTERFACE_BUILDER
     _state.placeholderNeedUpdate = YES;
     [[YYTextTransaction transactionWithTarget:self selector:@selector(_updatePlaceholderIfNeeded)] commit];
+#else
+    [self _updatePlaceholder];
+#endif
 }
 
 /// Update placeholder if needed.
@@ -380,7 +384,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         container.size = self.bounds.size;
         container.truncationType = YYTextTruncationTypeEnd;
         container.truncationToken = nil;
-        YYTextLayout *layout = [YYTextLayout layoutWithContainer:_innerContainer text:_placeholderAttributedText];
+        YYTextLayout *layout = [YYTextLayout layoutWithContainer:container text:_placeholderAttributedText];
         CGSize size = [layout textBoundingSize];
         BOOL needDraw = size.width > 1 && size.height > 1;
         if (needDraw) {
@@ -393,7 +397,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
             frame.size = image.size;
             if (container.isVerticalForm) {
                 frame.origin.x = self.bounds.size.width - image.size.width;
-                frame.origin.y = self.bounds.size.height - image.size.height;
             } else {
                 frame.origin = CGPointZero;
             }
@@ -1810,12 +1813,18 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     return [UIColor colorWithRed:69/255.0 green:111/255.0 blue:238/255.0 alpha:1];
 }
 
+/// Returns the default placeholder color for text view (same as UITextField).
+- (UIColor *)_defaultPlaceholderColor {
+    return [UIColor colorWithRed:0 green:0 blue:25/255.0 alpha:44/255.0];
+}
+
 #pragma mark - Private Setter
 
 - (void)_setText:(NSString *)text {
     if (_text == text || [_text isEqualToString:text]) return;
     [self willChangeValueForKey:@"text"];
     _text = text.copy;
+    if (!_text) _text = @"";
     [self didChangeValueForKey:@"text"];
     self.accessibilityLabel = _text;
 }
@@ -1880,6 +1889,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if (_attributedText == attributedText || [_attributedText isEqual:attributedText]) return;
     [self willChangeValueForKey:@"attributedText"];
     _attributedText = attributedText.copy;
+    if (!_attributedText) _attributedText = [NSAttributedString new];
     [self didChangeValueForKey:@"attributedText"];
 }
 
@@ -1916,6 +1926,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     [self willChangeValueForKey:@"selectedRange"];
     _selectedRange = selectedRange;
     [self didChangeValueForKey:@"selectedRange"];
+    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
+        [self.delegate textViewDidChangeSelection:self];
+    }
 }
 
 - (void)_setTypingAttributes:(NSDictionary *)typingAttributes {
@@ -1931,7 +1944,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     self.delaysContentTouches = NO;
     self.canCancelContentTouches = YES;
     self.multipleTouchEnabled = NO;
+    self.clipsToBounds = YES;
     [super setDelegate:self];
+    
+    _text = @"";
+    _attributedText = [NSAttributedString new];
     
     // UITextInputTraits
     _autocapitalizationType = UITextAutocapitalizationTypeSentences;
@@ -1975,7 +1992,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     _placeHolderView.hidden = YES;
     
     _containerView = [YYTextContainerView new];
-    _containerView.userInteractionEnabled = NO;
     _containerView.hostView = self;
     
     _selectionView = [YYTextSelectionView new];
@@ -2000,6 +2016,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     self.debugOption = [YYTextDebugOption sharedDebugOption];
     [YYTextDebugOption addDebugTarget:self];
     
+    [self _updateInnerContainerSize];
     [self _update];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_pasteboardChanged) name:UIPasteboardChangedNotification object:nil];
@@ -2172,14 +2189,11 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if ([self.delegate respondsToSelector:@selector(textViewDidChange:)]) {
         [self.delegate textViewDidChange:self];
     }
-    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-        [self.delegate textViewDidChangeSelection:self];
-    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:YYTextViewTextDidChangeNotification object:self];
     
     if (!_state.insideUndoBlock) {
         [self _resetUndoAndRedoStack];
     }
-    [[NSNotificationCenter defaultCenter] postNotificationName:YYTextViewTextDidChangeNotification object:self];
 }
 
 - (void)setTextVerticalAlignment:(YYTextVerticalAlignment)textVerticalAlignment {
@@ -2342,7 +2356,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
             NSMutableAttributedString *atr = [[NSMutableAttributedString alloc] initWithString:placeholderText];
             if (!_placeholderFont) _placeholderFont = _font;
             if (!_placeholderFont) _placeholderFont = [self _defaultFont];
-            if (_placeholderTextColor) _placeholderTextColor = [UIColor grayColor];
+            if (!_placeholderTextColor) _placeholderTextColor = [self _defaultPlaceholderColor];
             atr.yy_font = _placeholderFont;
             atr.yy_color = _placeholderTextColor;
             _placeholderAttributedText = atr;
@@ -2453,24 +2467,31 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 }
 
 - (CGSize)sizeThatFits:(CGSize)size {
-    YYTextLayout *textLayout = self.textLayout;
-    CGSize currentSize = YYTextCGSizePixelCeil(textLayout.textBoundingSize);
-    if (_verticalForm) {
-        if (currentSize.height == size.height) return currentSize;
-    } else {
-        if (currentSize.width == size.width) return currentSize;
+    if ((!_verticalForm && size.width == self.bounds.size.width) ||
+        (_verticalForm && size.height == self.bounds.size.height)) {
+        [self _updateIfNeeded];
+        if (!_verticalForm) {
+            if (_containerView.bounds.size.height <= size.height) {
+                return _containerView.bounds.size;
+            }
+        } else {
+            if (_containerView.bounds.size.width <= size.width) {
+                return _containerView.bounds.size;
+            }
+        }
     }
     
-    if (_verticalForm) {
-        size.width = CGFLOAT_MAX;
+    if (!_verticalForm) {
+        size.height = YYTextContainerMaxSize.height;
     } else {
-        size.height = CGFLOAT_MAX;
+        size.width = YYTextContainerMaxSize.width;
     }
-    YYTextContainer *newContainer = _innerContainer.mutableCopy;
-    newContainer.size = size;
-    YYTextLayout *newLayout = [YYTextLayout layoutWithContainer:newContainer text:textLayout.text];
-    CGSize newSize = newLayout.textBoundingSize;
-    return YYTextCGSizePixelCeil(newSize);
+    
+    YYTextContainer *container = [_innerContainer copy];
+    container.size = size;
+    
+    YYTextLayout *layout = [YYTextLayout layoutWithContainer:container text:_innerText];
+    return layout.textBoundingSize;
 }
 
 #pragma mark - Override UIResponder
@@ -2697,9 +2718,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
                 [_inputDelegate selectionWillChange:self];
                 _selectedTextRange = _trackingRange;
                 [_inputDelegate selectionDidChange:self];
-                if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-                    [self.delegate textViewDidChangeSelection:self];
-                }
                 [self _updateAttributesHolder];
                 [self _updateOuterProperties];
             }
@@ -2984,9 +3002,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         [_inputDelegate selectionWillChange:self];
         _selectedTextRange = newRange;
         [_inputDelegate selectionDidChange:self];
-        if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-            [self.delegate textViewDidChangeSelection:self];
-        }
     }
     
     [self _updateIfNeeded];
@@ -3001,9 +3016,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     [_inputDelegate selectionWillChange:self];
     _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(0, _innerText.length)];
     [_inputDelegate selectionDidChange:self];
-    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-        [self.delegate textViewDidChangeSelection:self];
-    }
     
     [self _updateIfNeeded];
     [self _updateOuterProperties];
@@ -3236,9 +3248,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
             
             [self _updateOuterProperties];
             [self _updateSelectionView];
-            if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-                [self.delegate textViewDidChangeSelection:self];
-            }
             return;
         }
     }
@@ -3275,6 +3284,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     
     [_inputDelegate selectionWillChange:self];
     _selectedTextRange = selectedTextRange;
+    _lastTypeRange = _selectedTextRange.asRange;
     [_inputDelegate selectionDidChange:self];
     
     [self _updateOuterProperties];
@@ -3282,10 +3292,6 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     
     if (self.isFirstResponder) {
         [self _scrollRangeToVisible:_selectedTextRange];
-    }
-    
-    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-        [self.delegate textViewDidChangeSelection:self];
     }
 }
 
@@ -3335,6 +3341,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
         [_innerText replaceCharactersInRange:NSMakeRange(_selectedTextRange.end.offset, 0) withString:markedText];
         _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(_selectedTextRange.start.offset + selectedRange.location, selectedRange.length)];
     } else {
+        _markedTextRange = [self _correctedTextRange:_markedTextRange];
         [_innerText replaceCharactersInRange:_markedTextRange.asRange withString:markedText];
         _markedTextRange = [YYTextRange rangeWithRange:NSMakeRange(_markedTextRange.start.offset, markedText.length)];
         _selectedTextRange = [YYTextRange rangeWithRange:NSMakeRange(_markedTextRange.start.offset + selectedRange.location, selectedRange.length)];
@@ -3362,9 +3369,7 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if ([self.delegate respondsToSelector:@selector(textViewDidChange:)]) {
         [self.delegate textViewDidChange:self];
     }
-    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-        [self.delegate textViewDidChangeSelection:self];
-    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:YYTextViewTextDidChangeNotification object:self];
     
     _lastTypeRange = _selectedTextRange.asRange;
 }
@@ -3439,13 +3444,9 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
     if ([self.delegate respondsToSelector:@selector(textViewDidChange:)]) {
         [self.delegate textViewDidChange:self];
     }
-    if ([self.delegate respondsToSelector:@selector(textViewDidChangeSelection:)]) {
-        [self.delegate textViewDidChangeSelection:self];
-    }
+    [[NSNotificationCenter defaultCenter] postNotificationName:YYTextViewTextDidChangeNotification object:self];
     
     _lastTypeRange = _selectedTextRange.asRange;
-    
-    [[NSNotificationCenter defaultCenter] postNotificationName:YYTextViewTextDidChangeNotification object:self];
 }
 
 - (void)setBaseWritingDirection:(UITextWritingDirection)writingDirection forRange:(YYTextRange *)range {
@@ -3677,6 +3678,147 @@ typedef NS_ENUM(NSUInteger, YYTextMoveDirection) {
 
 - (NSInteger)characterOffsetOfPosition:(YYTextPosition *)position withinRange:(YYTextRange *)range {
     return position ? position.offset : NSNotFound;
+}
+
+@end
+
+
+
+@interface YYTextView(IBInspectableProperties)
+@end
+
+@implementation YYTextView(IBInspectableProperties)
+
+- (BOOL)fontIsBold_:(UIFont *)font {
+    if (![font respondsToSelector:@selector(fontDescriptor)]) return NO;
+    return (font.fontDescriptor.symbolicTraits & UIFontDescriptorTraitBold) > 0;
+}
+
+- (UIFont *)boldFont_:(UIFont *)font {
+    if (![font respondsToSelector:@selector(fontDescriptor)]) return font;
+    return [UIFont fontWithDescriptor:[font.fontDescriptor fontDescriptorWithSymbolicTraits:UIFontDescriptorTraitBold] size:font.pointSize];
+}
+
+- (UIFont *)normalFont_:(UIFont *)font {
+    if (![font respondsToSelector:@selector(fontDescriptor)]) return font;
+    return [UIFont fontWithDescriptor:[font.fontDescriptor fontDescriptorWithSymbolicTraits:0] size:font.pointSize];
+}
+
+- (void)setFontName_:(NSString *)fontName {
+    if (!fontName) return;
+    UIFont *font = self.font;
+    if (!font) font = [self _defaultFont];
+    if ((fontName.length == 0 || [fontName.lowercaseString isEqualToString:@"system"]) && ![self fontIsBold_:font]) {
+        font = [UIFont systemFontOfSize:font.pointSize];
+    } else if ([fontName.lowercaseString isEqualToString:@"system bold"]) {
+        font = [UIFont boldSystemFontOfSize:font.pointSize];
+    } else {
+        if ([self fontIsBold_:font] && ![fontName.lowercaseString containsString:@"bold"]) {
+            font = [UIFont fontWithName:fontName size:font.pointSize];
+            font = [self boldFont_:font];
+        } else {
+            font = [UIFont fontWithName:fontName size:font.pointSize];
+        }
+    }
+    if (font) self.font = font;
+}
+
+- (void)setFontSize_:(CGFloat)fontSize {
+    if (fontSize <= 0) return;
+    UIFont *font = self.font;
+    if (!font) font = [self _defaultFont];
+    if (!font) font = [self _defaultFont];
+    font = [font fontWithSize:fontSize];
+    if (font) self.font = font;
+}
+
+- (void)setFontIsBold_:(BOOL)fontBold {
+    UIFont *font = self.font;
+    if (!font) font = [self _defaultFont];
+    if ([self fontIsBold_:font] == fontBold) return;
+    if (fontBold) {
+        font = [self boldFont_:font];
+    } else {
+        font = [self normalFont_:font];
+    }
+    if (font) self.font = font;
+}
+
+- (void)setPlaceholderFontName_:(NSString *)fontName {
+    if (!fontName) return;
+    UIFont *font = self.placeholderFont;
+    if (!font) font = [self _defaultFont];
+    if ((fontName.length == 0 || [fontName.lowercaseString isEqualToString:@"system"]) && ![self fontIsBold_:font]) {
+        font = [UIFont systemFontOfSize:font.pointSize];
+    } else if ([fontName.lowercaseString isEqualToString:@"system bold"]) {
+        font = [UIFont boldSystemFontOfSize:font.pointSize];
+    } else {
+        if ([self fontIsBold_:font] && ![fontName.lowercaseString containsString:@"bold"]) {
+            font = [UIFont fontWithName:fontName size:font.pointSize];
+            font = [self boldFont_:font];
+        } else {
+            font = [UIFont fontWithName:fontName size:font.pointSize];
+        }
+    }
+    if (font) self.placeholderFont = font;
+}
+
+- (void)setPlaceholderFontSize_:(CGFloat)fontSize {
+    if (fontSize <= 0) return;
+    UIFont *font = self.placeholderFont;
+    if (!font) font = [self _defaultFont];
+    font = [font fontWithSize:fontSize];
+    if (font) self.placeholderFont = font;
+}
+
+- (void)setPlaceholderFontIsBold_:(BOOL)fontBold {
+    UIFont *font = self.placeholderFont;
+    if (!font) font = [self _defaultFont];
+    if ([self fontIsBold_:font] == fontBold) return;
+    if (fontBold) {
+        font = [self boldFont_:font];
+    } else {
+        font = [self normalFont_:font];
+    }
+    if (font) self.placeholderFont = font;
+}
+
+- (void)setInsetTop_:(CGFloat)textInsetTop {
+    UIEdgeInsets insets = self.textContainerInset;
+    insets.top = textInsetTop;
+    self.textContainerInset = insets;
+}
+
+- (void)setInsetBottom_:(CGFloat)textInsetBottom {
+    UIEdgeInsets insets = self.textContainerInset;
+    insets.bottom = textInsetBottom;
+    self.textContainerInset = insets;
+}
+
+- (void)setInsetLeft_:(CGFloat)textInsetLeft {
+    UIEdgeInsets insets = self.textContainerInset;
+    insets.left = textInsetLeft;
+    self.textContainerInset = insets;
+    
+}
+
+- (void)setInsetRight_:(CGFloat)textInsetRight {
+    UIEdgeInsets insets = self.textContainerInset;
+    insets.right = textInsetRight;
+    self.textContainerInset = insets;
+}
+
+- (void)setDebugEnabled_:(BOOL)enabled {
+    if (!enabled) {
+        self.debugOption = nil;
+    } else {
+        YYTextDebugOption *debugOption = [YYTextDebugOption new];
+        debugOption.baselineColor = [UIColor redColor];
+        debugOption.CTFrameBorderColor = [UIColor redColor];
+        debugOption.CTLineFillColor = [UIColor colorWithRed:0.000 green:0.463 blue:1.000 alpha:0.180];
+        debugOption.CGGlyphBorderColor = [UIColor colorWithRed:1.000 green:0.524 blue:0.000 alpha:0.200];
+        self.debugOption = debugOption;
+    }
 }
 
 @end

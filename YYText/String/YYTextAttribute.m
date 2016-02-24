@@ -16,11 +16,11 @@
 #import "YYTextArchiver.h"
 
 
-static float _YYDeviceSystemVersion() {
-    static float version;
+static double _YYDeviceSystemVersion() {
+    static double version;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        version = [UIDevice currentDevice].systemVersion.floatValue;
+        version = [UIDevice currentDevice].systemVersion.doubleValue;
     });
     return version;
 }
@@ -387,6 +387,17 @@ YYTextAttributeType YYTextAttributeGetType(NSString *name){
 + (instancetype)highlightWithAttributes:(NSDictionary *)attributes {
     YYTextHighlight *one = [self new];
     one.attributes = attributes;
+    return one;
+}
+
++ (instancetype)highlightWithBackgroundColor:(UIColor *)color {
+    YYTextBorder *highlightBorder = [YYTextBorder new];
+    highlightBorder.insets = UIEdgeInsetsMake(-2, -1, -2, -1);
+    highlightBorder.cornerRadius = 3;
+    highlightBorder.fillColor = color;
+    
+    YYTextHighlight *one = [self new];
+    [one setBackgroundBorder:highlightBorder];
     return one;
 }
 

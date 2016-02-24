@@ -1,4 +1,4 @@
-YYText <a href="#中文介绍">中文介绍</a>
+YYText
 ==============
 [![License MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat)](https://raw.githubusercontent.com/ibireme/YYText/master/LICENSE)&nbsp;
 [![Carthage compatible](https://img.shields.io/badge/Carthage-compatible-4BC51D.svg?style=flat)](https://github.com/Carthage/Carthage)&nbsp;
@@ -274,6 +274,17 @@ Usage
     textView.attributedString = text;
     
 ### Text highlight
+    
+You can use some convenience methods to set text highlight:
+
+	[text yy_setTextHighlightRange:range
+                            color:[UIColor blueColor]
+                  backgroundColor:[UIColor grayColor]
+                        tapAction:^(UIView *containerView, NSAttributedString *text, NSRange range, CGRect rect){ 
+                            NSLog(@"tap text range:..."); 
+                        }];
+    
+Or set the text highlight with your custom config:
     
     // 1. Create a 'highlight' attribute for text.
     YYTextBorder *border = [YYTextBorder borderWithFillColor:[UIColor grayColor] cornerRadius:3];
@@ -791,6 +802,17 @@ YYText 和 TextKit 架构对比
     
 
 ### 文本高亮
+
+你可以用一些已经封装好的简便方法来设置文本高亮：
+
+	[text yy_setTextHighlightRange:range
+                            color:[UIColor blueColor]
+                  backgroundColor:[UIColor grayColor]
+                        tapAction:^(UIView *containerView, NSAttributedString *text, NSRange range, CGRect rect){ 
+                            NSLog(@"tap text range:..."); 
+                        }];
+
+或者用更复杂的办法来调节文本高亮的细节：
     
     // 1. 创建一个"高亮"属性，当用户点击了高亮区域的文本时，"高亮"属性会替换掉原本的属性
     YYTextBorder *border = [YYTextBorder borderWithFillColor:[UIColor grayColor] cornerRadius:3];
@@ -1039,7 +1061,6 @@ YYText 和 TextKit 架构对比
 已知问题
 ==============
 * YYText 并不能支持所有 CoreText/TextKit 的属性，比如 NSBackgroundColor、NSStrikethrough、NSUnderline、NSAttachment、NSLink 等，但 YYText 中基本都有对应属性作为替代。详情见上方表格。
-* 当 YYLabel 的高度小于第一行文本的内容高度时，文本不会显示。
 * YYTextView 目前还未实现局部刷新，所以在输入和编辑大量的文本（比如超过5K个汉字、10K个英文字符）时会出现较明显的卡顿现象。
 * 竖排版时，添加 exclusionPaths 在少数情况下可能会导致文本显示空白。
 * 当添加了非矩形的 textContainerPath 时，并且有嵌入大于文本排版方向宽度的 RunDelegate 时，RunDelegate 后面的文字会无法显示。这是 CoreText 的 Bug（也可能是 Feature）。
@@ -1048,3 +1069,5 @@ YYText 和 TextKit 架构对比
 许可证
 ==============
 YYText 使用 MIT 许可证，详情见 LICENSE 文件。
+
+

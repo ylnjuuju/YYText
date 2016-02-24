@@ -37,6 +37,21 @@
     return one;
 }
 
+- (UIViewController *)rootViewController {
+    for (UIWindow *window in [YYTextSharedApplication() windows]) {
+        if (self == window) continue;
+        if (window.hidden) continue;
+        UIViewController *topViewController = window.rootViewController;
+        if (topViewController) return topViewController;
+    }
+    UIViewController *viewController = [super rootViewController];
+    if (!viewController) {
+        viewController = [UIViewController new];
+        [super setRootViewController:viewController];
+    }
+    return viewController;
+}
+
 // Bring self to front
 - (void)_updateWindowLevel {
     UIApplication *app = YYTextSharedApplication();
@@ -281,7 +296,7 @@
     if (mag.type == YYTextMagnifierTypeRanged) {
         mag.alpha = 0;
     }
-    NSTimeInterval time = mag.type == YYTextMagnifierTypeCaret ? 0.06 : 0.1;
+    NSTimeInterval time = mag.type == YYTextMagnifierTypeCaret ? 0.08 : 0.1;
     [UIView animateWithDuration:time delay:0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionBeginFromCurrentState animations:^{
         if (mag.type == YYTextMagnifierTypeCaret) {
             CGPoint newCenter = CGPointMake(0, -mag.fitSize.height / 2);
